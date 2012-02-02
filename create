@@ -90,4 +90,4 @@ else
     chmod 644 $file
 fi
 
-echo "Created $file" >&2
+echo "Created $file"
