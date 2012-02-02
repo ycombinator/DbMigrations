@@ -14,7 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-source /opt/db-migrations/libexec/logging.sh
+source /usr/local/libexec/db-migrations/logging.sh
 
 # Configurables
 DAYTIME_SERVERS=( time-a.timefreq.bldrdoc.gov time-b.timefreq.bldrdoc.gov time-c.timefreq.bldrdoc.gov time-d.timefreq.bldrdoc.gov )

@@ -14,7 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-source /opt/db-migrations/libexec/logging.sh
+source /usr/local/libexec/db-migrations/logging.sh
 
 # Configurables
 MIG_VERSION_TABLE_NAME=__mig_version__
