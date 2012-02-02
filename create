@@ -60,19 +60,50 @@ get_timestamp() {
 
 }
 
-LOG_LEVEL=$1
-if [ "$LOG_LEVEL" == "" ]; then
-    LOG_LEVEL=$LOG_LEVEL_INFO
-fi
+print_usage() {
+    echo -e "Usage:\tcreate [-n <database name>] [-b <migrations base directory>] [-l <log level>]"
+    echo 
+    echo "Options:"
+    echo -e  "\t-n <database name>"
+    echo -e "\t\tSpecify the name of the database for which to create a migration. Required."
+    echo
+    echo -e "\t-b <migrations base directory>"
+    echo -e "\t\tSpecify the base directory to store migrations files. Optional; default = ."
+    echo
+    echo -e "\t-l <log level"
+    echo -e "\t\tSpecify the level of logging: DEBUG, INFO, WARNING, FATAL. Optional; default = INFO"
+    echo
+}
+
+let LOG_LEVEL=$LOG_LEVEL_INFO
 
 # Get user input
-while [ "$DB_NAME" == "" ]; do
-    read -ep "Database name: " DB_NAME
-done
+while getopts ":n:b:l:h" opt; do
+    case $opt in
+	n) DB_NAME=$OPTARG;;
+	b) BASEDIR=$OPTARG;;
+	l) LOG_LEVEL_STR=$OPTARG;;
+	h) print_usage; exit 0;;
+	:) LOG_FATAL "Option -$OPTARG requires an argument"; print_usage;  exit 1;;
+    esac
+done 
+	    
+if [ "$DB_NAME" == "" ]; then
+    LOG_FATAL "Database name not specified."
+    print_usage
+    exit 2
+fi
 
-while [ "$BASEDIR" == "" ]; do
-    read -ep "Migrations base directory: " BASEDIR
-done
+case $LOG_LEVEL_STR in
+    DEBUG)   let LOG_LEVEL=$LOG_LEVEL_DEBUG;;
+    INFO)    let LOG_LEVEL=$LOG_LEVEL_INFO;;
+    WARNING) let LOG_LEVEL=$LOG_LEVEL_WARNING;;
+    FATAL)   let LOG_LEVEL=$LOG_LEVEL_FATAL;;
+esac
+
+if [ "$BASEDIR" == "" ]; then
+    BASEDIR=.
+fi
 
 # Generate timestamp
 timestamp=$(get_timestamp)
