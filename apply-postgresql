@@ -55,9 +55,12 @@ exec_sql() {
 }
 
 exec_sql_file() {
-    output=$(PGPASSWORD=$DB_PASSWORD /usr/bin/psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1)
-    echo $output >&2
-    retval=$(echo $output | wc -l)
+    output=$(PGPASSWORD=$DB_PASSWORD /usr/bin/psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1 2>&1)
+    echo "foobar"
+    retval=$(echo "$output" | grep ERROR | wc -l)
+    if [ $retval -gt 0 ]; then
+	LOG_FATAL "$output"
+    fi
     return $retval
 }
 
@@ -107,6 +110,8 @@ if [ "$db_version" == "" ]; then
 
 fi
 
+LOG_DEBUG "DB version = $db_version"
+
 # Figure out which migrations need to be applied
 dir=$MIG_BASEDIR/$DB_NAME
 if [ -d $dir ]; then
@@ -138,16 +143,27 @@ if [ -d $dir ]; then
 	    echo "Applying migration version=$mig_version..."
 	    
 	    if [ -f "$up_file" ]; then
-		LOG_DEBUG "Applying UP migration file $up_file..."
-		exec_sql_file $up_file
-		retval=$?
-		
+
+		if [ -x "$up_file" ]; then
+		    LOG_DEBUG "Applying UP migration (advanced) file $up_file..."
+		    export DB_HOST DB_USERNAME DB_PASSWORD DB_NAME
+		    $up_file
+		    retval=$?
+		    
+		else
+		    LOG_DEBUG "Applying UP migration (basic) file $up_file..."
+
+		    exec_sql_file $up_file
+		    retval=$?
+
+		fi # END if - basic or advanced
+	    
 		if [ $retval -eq 0 ]; then
 		    
 		    LOG_DEBUG "Successfully applied migration $up_file. Updating version in DB to $mig_version..."
 		    
                     # Update version table in DB
-	            query="UPDATE $MIG_VERSION_TABLE_NAME SET version=$mig_version"
+		    query="UPDATE $MIG_VERSION_TABLE_NAME SET version=$mig_version"
 		    exec_sql "$query"
 		    retval=$?
 		    
@@ -160,11 +176,11 @@ if [ -d $dir ]; then
 		    
 		else
 		    
-		    LOG_DEBUG "Failed to apply migration $up_file."
+		    LOG_FATAL "Failed to apply migration $up_file."
 		    error=103
 		    
 		fi
-	    
+		
 	    else
 		error=101
 	    fi
