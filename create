@@ -24,7 +24,7 @@ get_timestamp() {
 }
 
 print_usage() {
-    echo -e "Usage:\tcreate [-n <database name>] [-b <migrations base directory>] [-l <log level>]"
+    echo -e "Usage:\tcreate <options>"
     echo 
     echo "Options:"
     echo -e  "\t-n <database name>"
