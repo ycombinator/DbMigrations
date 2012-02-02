@@ -1,15 +1,15 @@
-INSTALL_BASEDIR = /opt/db-migrations
+INSTALL_PREFIX = /usr/local
 
 install:
-	@mkdir -p ${INSTALL_BASEDIR}/libexec ${INSTALL_BASEDIR}/share/doc/
-	@cp *.sh ${INSTALL_BASEDIR}/libexec/
-	@cp LICENSE ${INSTALL_BASEDIR}/share/doc/
+	@mkdir -p ${INSTALL_PREFIX}/libexec/db-migrations ${INSTALL_PREFIX}/share/doc/db-migrations
+	@cp *.sh ${INSTALL_PREFIX}/libexec/db-migrations/
+	@cp LICENSE ${INSTALL_PREFIX}/share/doc/db-migrations/
 	@for f in create* apply*; do \
 		b=$(basename $$f); \
-		cp $$f /usr/local/bin/db-migrations-$$b; \
-		chmod 755 /usr/local/bin/db-migrations-$$b; \
+		cp $$f ${INSTALL_PREFIX}/bin/db-migrations-$$b; \
+		chmod 755 ${INSTALL_PREFIX}/bin/db-migrations-$$b; \
 	done
 
 uninstall:
-	@rm -rf ${INSTALL_BASEDIR}
-	@rm -f /usr/local/bin/db-migrations-*
+	@rm -rf ${INSTALL_PREFIX}
+	@rm -f ${INSTALL_PREFIX}/bin/db-migrations-*
