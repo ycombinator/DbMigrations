@@ -14,7 +14,11 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-source logging.sh
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+source $DIR/logging.sh
 
 # Configurables
 DAYTIME_SERVERS=( time-a.timefreq.bldrdoc.gov time-b.timefreq.bldrdoc.gov time-c.timefreq.bldrdoc.gov time-d.timefreq.bldrdoc.gov )
