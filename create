@@ -17,52 +17,10 @@
 source /usr/local/libexec/db-migrations/logging.sh
 
 # Configurables
-DAYTIME_SERVERS=( time-a.timefreq.bldrdoc.gov time-b.timefreq.bldrdoc.gov time-c.timefreq.bldrdoc.gov time-d.timefreq.bldrdoc.gov )
-DAYTIME_MAX_ATTEMPTS=5
-RETRY_INTERVAL=5
-
-get_random_server() {
-
-    rand_idx=$(expr $RANDOM % 4)
-    echo ${DAYTIME_SERVERS[$rand_idx]}
-
-}
-
-get_daytime_line() {
-
-    let num_attempts=1
-    while [ $num_attempts -lt $DAYTIME_MAX_ATTEMPTS ]; do
-
-    msg_prefix="[Attempt $num_attempts/$DAYTIME_MAX_ATTEMPTS]"
-
-    chosen_server=$(get_random_server)
-    LOG_DEBUG "$msg_prefix Attempting to get DAYTIME line from $chosen_server..."
-
-    line=$(telnet $chosen_server 13 2>/dev/null | tail -1 | grep '^[0-9]')
-    if [ "$line" != "" ]; then
-        echo "$line"
-	    return
-	    fi
-	    
-	    let num_attempts=num_attempts+1
-	    LOG_DEBUG "$msg_prefix Attempt failed. Sleeping for $RETRY_INTERVAL seconds before retrying..."
-	    sleep $RETRY_INTERVAL
-    done
-
-    LOG_DEBUG "Could not get DAYTIME line from servers in $DAYTIME_MAX_ATTEMPTS attempts. Giving up."
-    exit 1
-}
+UTC_TIME_WS_URI="http://www.earthtools.org/timezone/0/0"
 
 get_timestamp() {
-
-    daytime_line=$(get_daytime_line)
-    retval=$?
-    if [ $retval -ne 0 ]; then
-	exit $retval;
-    fi
-
-    echo $daytime_line | awk '{printf "20%s%s%03d",$2,$3,$7}' | sed 's/[-:]//g'
-
+    curl -s $UTC_TIME_WS_URI | xmllint --format - | grep utctime | sed 's/[^0-9]//g'
 }
 
 print_usage() {
