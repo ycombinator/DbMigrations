@@ -19,36 +19,72 @@ source /usr/local/libexec/db-migrations/logging.sh
 # Configurables
 MIG_VERSION_TABLE_NAME=__mig_version__
 
-LOG_LEVEL=$1
-if [ "$LOG_LEVEL" == "" ]; then
-    LOG_LEVEL=$LOG_LEVEL_INFO
+print_usage() {
+    echo -e "Usage:\tapply-postgresql <options>"
+    echo 
+    echo "Options:"
+    echo -e  "\t-H <database hostname>"
+    echo -e "\t\tSpecify the hostname of the database server. Optional; default = localhost."
+    echo
+    echo -e  "\t-P <database port>"
+    echo -e "\t\tSpecify the port for the database server. Optional; default = 5432."
+    echo
+    echo -e  "\t-u <database username>"
+    echo -e "\t\tSpecify the username for the database server. Required."
+    echo
+    echo -e  "\t-p <database password>"
+    echo -e "\t\tSpecify the password for the database server. Optional; default = <no password>."
+    echo
+    echo -e  "\t-n <database name>"
+    echo -e "\t\tSpecify the name of the database for which to create a migration. Required."
+    echo
+    echo -e "\t-b <migrations base directory>"
+    echo -e "\t\tSpecify the base directory to store migrations files. Optional; default = ."
+    echo
+    echo -e "\t-l <log level>"
+    echo -e "\t\tSpecify the level of logging: DEBUG, INFO, WARNING, FATAL. Optional; default = INFO"
+    echo
+}
+
+# Set defaults
+let LOG_LEVEL=$LOG_LEVEL_INFO
+DB_HOST=localhost
+DB_PORT=5432
+MIG_BASEDIR=.
+
+# Get user input
+while getopts ":H:P:u:p:n:b:l:h" opt; do
+    case $opt in
+	H) DB_HOST=$OPTARG;;
+	P) DB_PORT=$OPTARG;;
+	u) DB_USERNAME=$OPTARG;;
+	p) DB_PASSWORD=$OPTARG;;
+	n) DB_NAME=$OPTARG;;
+	b) MIG_BASEDIR=$OPTARG;;
+	l) LOG_LEVEL_STR=$OPTARG;;
+	h) print_usage; exit 0;;
+	:) LOG_FATAL "Option -$OPTARG requires an argument"; print_usage;  exit 1;;
+    esac
+done 
+	    
+if [ "$DB_NAME" == "" ]; then
+    LOG_FATAL "Database name not specified."
+    print_usage
+    exit 2
 fi
 
-# Read DB_HOST
-while [ "$DB_HOST" == "" ]; do
-    read -ep "DB host: " DB_HOST
-done
+if [ "$DB_USERNAME" == "" ]; then
+    LOG_FATAL "Database username not specified."
+    print_usage
+    exit 3
+fi
 
-# Read DB_USERNAME
-while [ "$DB_USERNAME" == "" ]; do
-    read -ep "DB username: " DB_USERNAME
-done
-
-# Read DB_PASSWORD
-while [ "$DB_PASSWORD" == "" ]; do
-    read -esp "DB password: " DB_PASSWORD
-    echo
-done
-
-# Read DB_NAME
-while [ "$DB_NAME" == "" ]; do
-    read -ep "DB name: " DB_NAME
-done
-
-# Read MIG_BASEDIR
-while [ "$MIG_BASEDIR" == "" ]; do
-    read -ep "Migrations dir: " MIG_BASEDIR
-done
+case $LOG_LEVEL_STR in
+    DEBUG)   let LOG_LEVEL=$LOG_LEVEL_DEBUG;;
+    INFO)    let LOG_LEVEL=$LOG_LEVEL_INFO;;
+    WARNING) let LOG_LEVEL=$LOG_LEVEL_WARNING;;
+    FATAL)   let LOG_LEVEL=$LOG_LEVEL_FATAL;;
+esac
 
 exec_sql() {
     PGPASSWORD=$DB_PASSWORD /usr/bin/psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="$@" 2>/dev/null
@@ -56,7 +92,6 @@ exec_sql() {
 
 exec_sql_file() {
     output=$(PGPASSWORD=$DB_PASSWORD /usr/bin/psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1 2>&1)
-    echo "foobar"
     retval=$(echo "$output" | grep ERROR | wc -l)
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
@@ -115,6 +150,7 @@ LOG_DEBUG "DB version = $db_version"
 # Figure out which migrations need to be applied
 dir=$MIG_BASEDIR/$DB_NAME
 if [ -d $dir ]; then
+    LOG_DEBUG "Looking for migrations in $dir..."
     all_migs=$(find $dir -maxdepth 1 -mindepth 1 -type d -name [0-9]* | sort -n)
     applicable_migs=""
     for mig in $all_migs; do
