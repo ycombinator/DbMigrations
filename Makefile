@@ -11,5 +11,6 @@ install:
 	done
 
 uninstall:
-	@rm -rf ${INSTALL_PREFIX}
+	@rm -rf ${INSTALL_PREFIX}/libexec/db-migrations
+	@rm -rf ${INSTALL_PREFIX}/share/doc/db-migrations
 	@rm -f ${INSTALL_PREFIX}/bin/db-migrations-*
