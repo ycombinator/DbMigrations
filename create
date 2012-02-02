@@ -72,20 +72,27 @@ print_usage() {
     echo -e  "\t-n <database name>"
     echo -e "\t\tSpecify the name of the database for which to create a migration. Required."
     echo
+    echo -e "\t-a"
+    echo -e "\t\tCreate an advanced migration (i.e. an executable migration file). Optional; default = create a basic migration"
+    echo
     echo -e "\t-b <migrations base directory>"
     echo -e "\t\tSpecify the base directory to store migrations files. Optional; default = ."
     echo
-    echo -e "\t-l <log level"
+    echo -e "\t-l <log level>"
     echo -e "\t\tSpecify the level of logging: DEBUG, INFO, WARNING, FATAL. Optional; default = INFO"
     echo
 }
 
+# Set defaults
 let LOG_LEVEL=$LOG_LEVEL_INFO
+MIG_LEVEL=simple
+BASEDIR=.
 
 # Get user input
-while getopts ":n:b:l:h" opt; do
+while getopts ":n:ab:l:h" opt; do
     case $opt in
 	n) DB_NAME=$OPTARG;;
+	a) MIG_LEVEL=advanced;;
 	b) BASEDIR=$OPTARG;;
 	l) LOG_LEVEL_STR=$OPTARG;;
 	h) print_usage; exit 0;;
@@ -106,10 +113,6 @@ case $LOG_LEVEL_STR in
     FATAL)   let LOG_LEVEL=$LOG_LEVEL_FATAL;;
 esac
 
-if [ "$BASEDIR" == "" ]; then
-    BASEDIR=.
-fi
-
 # Generate timestamp
 timestamp=$(get_timestamp)
 retval=$?
@@ -123,5 +126,10 @@ dir=$BASEDIR/$DB_NAME/$timestamp
 file=$dir/up
 mkdir -p $dir
 touch $file
+if [ "$MIG_LEVEL" == "advanced" ]; then
+    chmod 755 $file
+else
+    chmod 644 $file
+fi
 
 echo "Created $file" >&2
