@@ -129,10 +129,10 @@ fi
 
 # Get current migration version
 query="SELECT version FROM $MIG_VERSION_TABLE_NAME"
-let db_version=$(expr $(exec_sql "$query") + 0)
+let db_version=$(exec_sql "$query")
 
 if [ "$db_version" == "" ]; then
-    let db_version=0
+    let db_version=$(expr $db_version + 0)0
     LOG_DEBUG "Initializing DB version..."
     query="INSERT INTO $MIG_VERSION_TABLE_NAME VALUES($db_version)"
     exec_sql "$query"
@@ -204,7 +204,7 @@ if [ -d $dir ]; then
 	    
 		if [ $retval -eq 0 ]; then
 		    
-		    LOG_DEBUG "Successfully applied migration $up_file. Updating version in DB to $mig_version..."
+		    echo "Successfully applied migration $up_file. Updating version in DB to $mig_version..."
 		    
                     # Update version table in DB
 		    query="UPDATE $MIG_VERSION_TABLE_NAME SET version=$mig_version"
@@ -214,7 +214,7 @@ if [ -d $dir ]; then
 		    if [ $retval -eq 0 ]; then
 			LOG_DEBUG "Successfully updated DB version to $mig_version."
 		    else
-			LOG_DEBUG "Failed to update DB version to $mig_version."
+			LOG_FATAL "Failed to update DB version to $mig_version."
 			error=102
 		    fi
 		    
