@@ -129,7 +129,7 @@ fi
 
 # Get current migration version
 query="SELECT version FROM $MIG_VERSION_TABLE_NAME"
-let db_version=$(exec_sql "$query")
+db_version=$(exec_sql "$query")
 
 if [ "$db_version" == "" ]; then
     let db_version=$(expr $db_version + 0)0
