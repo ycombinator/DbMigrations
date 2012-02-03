@@ -132,7 +132,7 @@ query="SELECT version FROM $MIG_VERSION_TABLE_NAME"
 db_version=$(exec_sql "$query")
 
 if [ "$db_version" == "" ]; then
-    let db_version=$(expr $db_version + 0)0
+    let db_version=0
     LOG_DEBUG "Initializing DB version..."
     query="INSERT INTO $MIG_VERSION_TABLE_NAME VALUES($db_version)"
     exec_sql "$query"
@@ -145,6 +145,8 @@ if [ "$db_version" == "" ]; then
 
 fi
 
+# Remove unnecessary padding from DB version
+let db_version=$(expr $db_version + 0)
 LOG_DEBUG "DB version = $db_version"
 
 # Figure out which migrations need to be applied
