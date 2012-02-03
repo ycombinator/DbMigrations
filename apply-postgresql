@@ -129,10 +129,10 @@ fi
 
 # Get current migration version
 query="SELECT version FROM $MIG_VERSION_TABLE_NAME"
-db_version=$(exec_sql "$query")
+let db_version=$(expr $(exec_sql "$query") + 0)
 
 if [ "$db_version" == "" ]; then
-    db_version=0
+    let db_version=0
     LOG_DEBUG "Initializing DB version..."
     query="INSERT INTO $MIG_VERSION_TABLE_NAME VALUES($db_version)"
     exec_sql "$query"
@@ -166,8 +166,16 @@ if [ -d $dir ]; then
 	exit
     fi
     
-    # TODO: Backup DB
-    
+    # Backup DB
+    echo "Backing up database (version = $db_version) in case there is a need to rollback."
+    DB_BACKUP_FILENAME=$(tempfile --prefix=db-migrations-backup- --suffix=.tar)
+    PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
+    retval=$?
+    if [ $retval -ne 0 ]; then
+	LOG_FATAL "Could not create database backup. Not safe to attempt migrations."
+	exit $retval
+    fi
+
     # Apply migrations, in order
     error=0
     for mig in $applicable_migs; do
@@ -226,7 +234,23 @@ if [ -d $dir ]; then
 
     # Rollback if there were errors
     if [ $error -ne 0 ]; then
-        # TODO: Restore DB from backup
+	# Drop all tables
+	PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP TABLE ' || n.nspname || '.' || c.relname || ' CASCADE;' FROM pg_catalog.pg_class AS c LEFT JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace WHERE relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'pg_toast') AND pg_catalog.pg_table_is_visible(c.oid)" | psql --quiet --host=$DB_HOST --port=$DB_PORT --username $DB_USERNAME $DB_NAME 2>/dev/null
+	retval=$?
+	if [ $retval -ne 0 ]; then
+	    LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
+	    exit 201
+	fi
+
+        # Restore DB from backup
+	PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME 2>/dev/null
+	retval=$?
+	if [ $retval -ne 0 ]; then
+	    LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
+	    exit 202
+	fi
+
+	echo "Rolled back database (version = $db_version) from backup."
 	exit $error
     fi
 
