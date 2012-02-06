@@ -1,0 +1,167 @@
+#!/bin/bash
+
+#   Copyright 2011 Shaunak Kashyap
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+source logging.sh
+
+# Configurables
+MIG_VERSION_TABLE_NAME=__mig_version__
+
+LOG_LEVEL=$1
+if [ "$LOG_LEVEL" == "" ]; then
+    LOG_LEVEL=$LOG_LEVEL_INFO
+fi
+
+# Read DB_HOST
+while [ "$DB_HOST" == "" ]; do
+    read -ep "DB host: " DB_HOST
+done
+
+# Read DB_USERNAME
+while [ "$DB_USERNAME" == "" ]; do
+    read -ep "DB username: " DB_USERNAME
+done
+
+# Read DB_PASSWORD
+while [ "$DB_PASSWORD" == "" ]; do
+    read -esp "DB password: " DB_PASSWORD
+    echo
+done
+
+# Read DB_NAME
+while [ "$DB_NAME" == "" ]; do
+    read -ep "DB name: " DB_NAME
+done
+
+# Read MIG_BASEDIR
+while [ "$MIG_BASEDIR" == "" ]; do
+    read -ep "Migrations dir: " MIG_BASEDIR
+done
+
+MYSQL_CMD="mysql5 -h $DB_HOST -u $DB_USERNAME --password=$DB_PASSWORD --skip-column-names $DB_NAME"
+
+# First, try to connect
+query="\q"
+echo "$query" | $MYSQL_CMD
+retval=$?
+if [ ! $retval -eq 0 ]; then
+    exit $retval;
+fi
+
+# Check if migration version table exists
+LOG_DEBUG "Checking if migration version table $MIG_VERSION_TABLE exists..."
+exists=$(echo "SHOW TABLES LIKE '$MIG_VERSION_TABLE_NAME'" \
+    | $MYSQL_CMD \
+    | wc -l)
+
+# Create table if it does not exist
+if [ $exists -eq 0 ]; then
+    LOG_DEBUG "Table does not exist. Creating..."
+    query="CREATE TABLE $MIG_VERSION_TABLE_NAME ( version BIGINT NOT NULL PRIMARY KEY )"
+    echo "$query" | $MYSQL_CMD
+
+    retval=$?
+    if [ $retval -ne 0 ]; then
+    LOG_FATAL "Failed to create migration version table in DB. "
+    exit $retval
+    fi
+
+fi
+
+# Get current migration version
+query="SELECT version FROM $MIG_VERSION_TABLE_NAME"
+db_version=$(echo "$query" | $MYSQL_CMD)
+
+if [ "$db_version" == "" ]; then
+    db_version=0
+    LOG_DEBUG "Initializing DB version..."
+    query="INSERT INTO $MIG_VERSION_TABLE_NAME VALUES($db_version)"
+    echo "$query" | $MYSQL_CMD
+
+    retval=$?
+    if [ $retval -ne 0 ]; then
+    LOG_FATAL "Failed to initialize  migration version table in DB. "
+    exit $retval
+    fi
+
+fi
+
+#db_version=20120206155550163
+
+# Figure out which migrations need to be applied
+dir=$MIG_BASEDIR/$DB_NAME
+all_migs=$(find $dir -type d -name [0-9]* -maxdepth 1 -mindepth 1 | sort -n)
+applicable_migs=""
+for mig in $all_migs; do
+    mig_version=$(basename $mig)
+    if [ $mig_version -gt $db_version ]; then
+    applicable_migs="$applicable_migs $mig"
+    fi
+done
+
+# Quit if there are no migrations to apply
+if [ "$applicable_migs" == "" ]; then
+    echo "All migrations already applied. Nothing to do."
+    exit
+fi
+
+# TODO: Backup DB
+
+# Apply migrations, in order
+error=0
+for mig in $applicable_migs; do
+
+    mig_version=$(basename $mig)
+    up_file="$mig/up"
+
+    if [ -f "$up_file" ]; then
+    LOG_DEBUG "Applying UP migration file $up_file..."
+    $MYSQL_CMD < $up_file
+    retval=$?
+
+    if [ $retval -eq 0 ]; then
+
+        LOG_DEBUG "Successfully applied migration $up_file. Updating version in DB to $mig_version..."
+
+	    # Update version table in DB
+	        query="UPDATE $MIG_VERSION_TABLE_NAME SET version=$mig_version"
+		    echo "$query" | $MYSQL_CMD
+		        retval=$?
+
+			    if [ $retval -eq 0 ]; then
+			       LOG_DEBUG "Successfully updated DB version to $mig_version."
+			           else
+					LOG_DEBUG "Failed to update DB version to $mig_version."
+						  error=102
+						      fi
+
+						      else
+
+						          LOG_DEBUG "Failed to apply migration $up_file."
+							      error = 103
+
+							      fi
+
+    else
+    error=101
+    fi
+
+done
+
+# Rollback if there were errors
+if [ $error -ne 0 ]; then
+    # TODO: Restore DB from backup
+    exit $error
+fi
