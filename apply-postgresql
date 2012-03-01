@@ -236,16 +236,23 @@ if [ -d $dir ]; then
 
     # Rollback if there were errors
     if [ $error -ne 0 ]; then
-	# Drop all tables
-	PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP TABLE ' || n.nspname || '.' || c.relname || ' CASCADE;' FROM pg_catalog.pg_class AS c LEFT JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace WHERE relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'pg_toast') AND pg_catalog.pg_table_is_visible(c.oid)" | psql --quiet --host=$DB_HOST --port=$DB_PORT --username $DB_USERNAME $DB_NAME 2>/dev/null
+
+	# Drop all sequences
+	drop_sequences_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP SEQUENCE ' || sequence_name || ' CASCADE;' FROM information_schema.sequences WHERE sequence_schema='public'")
+
+	# Drop all tables 
+	drop_tables_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP TABLE ' || table_name || ' CASCADE;' FROM information_schema.tables WHERE table_schema='public' AND table_type != 'VIEW' AND table_name NOT LIKE 'pg_ts_%%'")
+
+	echo -e "$drop_sequences_stmts\n$drop_tables_stmts" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --port=$DB_PORT --username $DB_USERNAME $DB_NAME 2>/dev/null
 	retval=$?
 	if [ $retval -ne 0 ]; then
+	    LOG_DEBUG "Rollback return code = $retval"
 	    LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
 	    exit 201
 	fi
 
         # Restore DB from backup
-	PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME 2>/dev/null
+	PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME #2>/dev/null
 	retval=$?
 	if [ $retval -ne 0 ]; then
 	    LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
