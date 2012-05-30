@@ -32,7 +32,7 @@ print_usage() {
     echo -e "Usage:\tcreate <options>"
     echo 
     echo "Options:"
-    echo -e  "\t-n <database name>"
+    echo -e  "\t-d <database name>"
     echo -e "\t\tSpecify the name of the database for which to create a migration. Required."
     echo
     echo -e "\t-a"
@@ -52,9 +52,9 @@ MIG_LEVEL=simple
 BASEDIR=.
 
 # Get user input
-while getopts ":n:ab:l:h" opt; do
+while getopts ":d:ab:l:h" opt; do
     case $opt in
-	n) DB_NAME=$OPTARG;;
+	d) DB_NAME=$OPTARG;;
 	a) MIG_LEVEL=advanced;;
 	b) BASEDIR=$OPTARG;;
 	l) LOG_LEVEL_STR=$OPTARG;;
