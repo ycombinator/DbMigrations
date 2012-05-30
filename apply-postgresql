@@ -23,16 +23,16 @@ print_usage() {
     echo -e "Usage:\tapply-postgresql <options>"
     echo 
     echo "Options:"
-    echo -e  "\t-h <database hostname>"
+    echo -e "\t-h <database hostname>"
     echo -e "\t\tSpecify the hostname of the database server. Optional; default = localhost."
     echo
-    echo -e  "\t-p <database port>"
+    echo -e "\t-p <database port>"
     echo -e "\t\tSpecify the port for the database server. Optional; default = 5432."
     echo
-    echo -e  "\t-U <database username>"
+    echo -e "\t-U <database username>"
     echo -e "\t\tSpecify the username for the database server. Required."
     echo
-    echo -e  "\t-d <database name>"
+    echo -e "\t-d <database name>"
     echo -e "\t\tSpecify the name of the database for which to create a migration. Required."
     echo
     echo -e "\t-b <migrations base directory>"
@@ -41,16 +41,21 @@ print_usage() {
     echo -e "\t-l <log level>"
     echo -e "\t\tSpecify the level of logging: DEBUG, INFO, WARNING, FATAL. Optional; default = INFO"
     echo
+    echo -e "\t-n"
+    echo -e "\t\tDo not backup tables via pg dump."
+    echo -e "\t\tWarning: Using this option may destroy data in the tables."
+    echo
 }
 
 # Set defaults
 let LOG_LEVEL=$LOG_LEVEL_INFO
 DB_HOST=localhost
 DB_PORT=5432
+DB_BACKUP=1
 MIG_BASEDIR=.
 
 # Get user input
-while getopts ":h:p:U:d:b:l:h" opt; do
+while getopts ":h:p:U:d:b:l:hn" opt; do
     case $opt in
 	h) DB_HOST=$OPTARG;;
 	p) DB_PORT=$OPTARG;;
@@ -59,6 +64,7 @@ while getopts ":h:p:U:d:b:l:h" opt; do
 	b) MIG_BASEDIR=$OPTARG;;
 	l) LOG_LEVEL_STR=$OPTARG;;
 	h) print_usage; exit 0;;
+	n) DB_BACKUP=0;;
 	:) LOG_FATAL "Option -$OPTARG requires an argument"; print_usage;  exit 1;;
     esac
 done 
@@ -164,14 +170,16 @@ if [ -d $dir ]; then
 	exit
     fi
     
-    # Backup DB
-    echo "Backing up database (version = $db_version) in case there is a need to rollback."
-    DB_BACKUP_FILENAME=$(tempfile --prefix=db-migrations-backup- --suffix=.tar)
-    PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
-    retval=$?
-    if [ $retval -ne 0 ]; then
-	    LOG_FATAL "Could not create database backup. Not safe to attempt migrations."
-    	exit $retval
+    if [ $DB_BACKUP -eq 1 ]; then
+        # Backup DB
+        echo "Backing up database (version = $db_version) in case there is a need to rollback."
+        DB_BACKUP_FILENAME=$(tempfile --prefix=db-migrations-backup- --suffix=.tar)
+        PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
+        retval=$?
+        if [ $retval -ne 0 ]; then
+    	    LOG_FATAL "Could not create database backup. Not safe to attempt migrations."
+        	exit $retval
+        fi
     fi
 
     # Apply migrations, in order
@@ -230,42 +238,55 @@ if [ -d $dir ]; then
 
     done
 
-    # Rollback if there were errors
-    if [ $error -ne 0 ]; then
+    if [ $DB_BACKUP -eq 1]; then
+    
+        # Rollback if there were errors
+        if [ $error -ne 0 ]; then
 
-	    # Drop all sequences
-	    drop_sequences_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP SEQUENCE ' || sequence_name || ' CASCADE;' FROM information_schema.sequences WHERE sequence_schema='public'")
+    	    # Drop all sequences
+	        drop_sequences_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP SEQUENCE ' || sequence_name || ' CASCADE;' FROM information_schema.sequences WHERE sequence_schema='public'")
+    
+	        # Drop all tables 
+    	    drop_tables_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP TABLE ' || table_name || ' CASCADE;' FROM information_schema.tables WHERE table_schema='public' AND table_type != 'VIEW' AND table_name NOT LIKE 'pg_ts_%%'")
+    
+        	echo -e "$drop_sequences_stmts\n$drop_tables_stmts" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --port=$DB_PORT --username $DB_USERNAME $DB_NAME 2>/dev/null
+    	    retval=$?
+        	if [ $retval -ne 0 ]; then
+        	    LOG_DEBUG "Rollback return code = $retval"
+    	        LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
+    	        LOG_FATAL "Backup file located at: $DB_BACKUP_FILENAME"
+    	        exit 201
+        	fi
 
-	    # Drop all tables 
-    	drop_tables_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP TABLE ' || table_name || ' CASCADE;' FROM information_schema.tables WHERE table_schema='public' AND table_type != 'VIEW' AND table_name NOT LIKE 'pg_ts_%%'")
+            # Restore DB from backup
+        	PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME #2>/dev/null
+        	retval=$?
+	        if [ $retval -ne 0 ]; then
+	            LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
+	            LOG_FATAL "Backup file located at: $DB_BACKUP_FILENAME"
+        	    exit 202
+        	fi
 
-    	echo -e "$drop_sequences_stmts\n$drop_tables_stmts" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --port=$DB_PORT --username $DB_USERNAME $DB_NAME 2>/dev/null
-    	retval=$?
-    	if [ $retval -ne 0 ]; then
-    	    LOG_DEBUG "Rollback return code = $retval"
-    	    LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
-    	    LOG_FATAL "Backup file located at: $DB_BACKUP_FILENAME"
-	        exit 201
-    	fi
+            # Delete the backup file
+            rm $DB_BACKUP_FILENAME
 
-        # Restore DB from backup
-    	PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME #2>/dev/null
-    	retval=$?
-	    if [ $retval -ne 0 ]; then
-	        LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
-	        LOG_FATAL "Backup file located at: $DB_BACKUP_FILENAME"
-    	    exit 202
-    	fi
-
-        # Delete the backup file
-        rm $DB_BACKUP_FILENAME
-
-	    echo "Rolled back database (version = $db_version) from backup."
-    	exit $error
+	        echo "Rolled back database (version = $db_version) from backup."
+    	    exit $error
+        else
+    
+            # Delete the backup file
+            rm $DB_BACKUP_FILENAME
+        
+        fi
+    
     else
     
-        # Delete the backup file
-        rm $DB_BACKUP_FILENAME
+        if [ $error -ne 0 ]; then
+        
+            LOG_FATAL "Database may be in an inconsistent state and database backup was not created!"
+            exit 201
+        
+        fi
         
     fi
 
