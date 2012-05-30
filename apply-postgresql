@@ -23,19 +23,16 @@ print_usage() {
     echo -e "Usage:\tapply-postgresql <options>"
     echo 
     echo "Options:"
-    echo -e  "\t-H <database hostname>"
+    echo -e  "\t-h <database hostname>"
     echo -e "\t\tSpecify the hostname of the database server. Optional; default = localhost."
     echo
-    echo -e  "\t-P <database port>"
+    echo -e  "\t-p <database port>"
     echo -e "\t\tSpecify the port for the database server. Optional; default = 5432."
     echo
-    echo -e  "\t-u <database username>"
+    echo -e  "\t-U <database username>"
     echo -e "\t\tSpecify the username for the database server. Required."
     echo
-    echo -e  "\t-p <database password>"
-    echo -e "\t\tSpecify the password for the database server. Optional; default = <no password>."
-    echo
-    echo -e  "\t-n <database name>"
+    echo -e  "\t-d <database name>"
     echo -e "\t\tSpecify the name of the database for which to create a migration. Required."
     echo
     echo -e "\t-b <migrations base directory>"
@@ -53,13 +50,12 @@ DB_PORT=5432
 MIG_BASEDIR=.
 
 # Get user input
-while getopts ":H:P:u:p:n:b:l:h" opt; do
+while getopts ":h:p:U:d:b:l:h" opt; do
     case $opt in
-	H) DB_HOST=$OPTARG;;
-	P) DB_PORT=$OPTARG;;
-	u) DB_USERNAME=$OPTARG;;
-	p) DB_PASSWORD=$OPTARG;;
-	n) DB_NAME=$OPTARG;;
+	h) DB_HOST=$OPTARG;;
+	p) DB_PORT=$OPTARG;;
+	U) DB_USERNAME=$OPTARG;;
+	d) DB_NAME=$OPTARG;;
 	b) MIG_BASEDIR=$OPTARG;;
 	l) LOG_LEVEL_STR=$OPTARG;;
 	h) print_usage; exit 0;;
