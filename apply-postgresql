@@ -238,7 +238,7 @@ if [ -d $dir ]; then
 
     done
 
-    if [ $DB_BACKUP -eq 1]; then
+    if [ $DB_BACKUP -eq 1 ]; then
     
         # Rollback if there were errors
         if [ $error -ne 0 ]; then
