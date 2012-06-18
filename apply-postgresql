@@ -89,11 +89,11 @@ case $LOG_LEVEL_STR in
 esac
 
 exec_sql() {
-    PGPASSWORD=$DB_PASSWORD /usr/bin/psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="$@" 2>/dev/null
+    PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="$@" 2>/dev/null
 }
 
 exec_sql_file() {
-    output=$(PGPASSWORD=$DB_PASSWORD /usr/bin/psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1 2>&1)
+    output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1 2>&1)
     retval=$(echo "$output" | grep ERROR | wc -l)
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
