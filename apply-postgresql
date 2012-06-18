@@ -173,7 +173,7 @@ if [ -d $dir ]; then
     if [ $DB_BACKUP -eq 1 ]; then
         # Backup DB
         echo "Backing up database (version = $db_version) in case there is a need to rollback."
-        DB_BACKUP_FILENAME=$(tempfile --prefix=db-migrations-backup- --suffix=.tar)
+        DB_BACKUP_FILENAME=$( mktemp -t db-migrations-backup-XXXXXXXXXX )
         PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
         retval=$?
         if [ $retval -ne 0 ]; then
