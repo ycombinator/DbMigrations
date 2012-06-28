@@ -88,6 +88,8 @@ case $LOG_LEVEL_STR in
     FATAL)   let LOG_LEVEL=$LOG_LEVEL_FATAL;;
 esac
 
+DB_BACKUP_FILENAME=""
+
 exec_sql() {
     PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="$@" 2>/dev/null
 }
@@ -100,6 +102,19 @@ exec_sql_file() {
     fi
     return $retval
 }
+
+backup() {
+    PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
+}
+
+cleanup() {
+    PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME #2>/dev/null
+    if [ -a "$DB_BACKUP_FILENAME" ]; then
+        rm $DB_BACKUP_FILENAME
+    fi
+}
+
+trap "{cleanup ; exit 0}" SIGINT SIGTERM SIGKILL
 
 # First, try to connect
 query="\q"
@@ -141,8 +156,8 @@ if [ "$db_version" == "" ]; then
 
     retval=$?
     if [ $retval -ne 0 ]; then
-	LOG_FATAL "Failed to initialize  migration version table in DB. "
-	exit $retval
+    	LOG_FATAL "Failed to initialize  migration version table in DB. "
+    	exit $retval
     fi
 
 fi
@@ -158,23 +173,23 @@ if [ -d $dir ]; then
     all_migs=$(find $dir -maxdepth 1 -mindepth 1 -type d -name [0-9]* | sort -n)
     applicable_migs=""
     for mig in $all_migs; do
-	mig_version=$(basename $mig)
-	if [ $mig_version -gt $db_version ]; then
-	    applicable_migs="$applicable_migs $mig"
-	fi
+    	mig_version=$(basename $mig)
+    	if [ $mig_version -gt $db_version ]; then
+    	    applicable_migs="$applicable_migs $mig"
+    	fi
     done
     
     # Quit if there are no migrations to apply
     if [ "$applicable_migs" == "" ]; then
-	echo "All migrations already applied. Nothing to do."
-	exit
+    	echo "All migrations already applied. Nothing to do."
+    	exit
     fi
     
     if [ $DB_BACKUP -eq 1 ]; then
         # Backup DB
         echo "Backing up database (version = $db_version) in case there is a need to rollback."
         DB_BACKUP_FILENAME=$( mktemp -t db-migrations-backup-XXXXXXXXXX )
-        PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
+        backup
         retval=$?
         if [ $retval -ne 0 ]; then
     	    LOG_FATAL "Could not create database backup. Not safe to attempt migrations."
@@ -194,42 +209,42 @@ if [ -d $dir ]; then
 	    
 	    if [ -f "$up_file" ]; then
 
-		if [ -x "$up_file" ]; then
-		    LOG_DEBUG "Applying UP migration (advanced) file $up_file..."
-		    export DB_HOST DB_USERNAME DB_PASSWORD DB_NAME
-		    $up_file
-		    retval=$?
-		    
-		else
-		    LOG_DEBUG "Applying UP migration (basic) file $up_file..."
+    		if [ -x "$up_file" ]; then
+    		    LOG_DEBUG "Applying UP migration (advanced) file $up_file..."
+    		    export DB_HOST DB_USERNAME DB_PASSWORD DB_NAME
+    		    $up_file
+    		    retval=$?
+    		    
+    		else
+    		    LOG_DEBUG "Applying UP migration (basic) file $up_file..."
 
-		    exec_sql_file $up_file
-		    retval=$?
+    		    exec_sql_file $up_file
+    		    retval=$?
 
-		fi # END if - basic or advanced
-	    
-		if [ $retval -eq 0 ]; then
-		    
-		    echo "Successfully applied migration $up_file. Updating version in DB to $mig_version..."
-		    
-                    # Update version table in DB
-		    query="UPDATE $MIG_VERSION_TABLE_NAME SET version=$mig_version"
-		    exec_sql "$query"
-		    retval=$?
-		    
-		    if [ $retval -eq 0 ]; then
-			    LOG_DEBUG "Successfully updated DB version to $mig_version."
-		    else
-			    LOG_FATAL "Failed to update DB version to $mig_version."
-			    error=102
-		    fi
-		    
-		else
-		    
-		    LOG_FATAL "Failed to apply migration $up_file."
-		    error=103
-		    
-		fi
+    		fi # END if - basic or advanced
+    	    
+    		if [ $retval -eq 0 ]; then
+    		    
+    		    echo "Successfully applied migration $up_file. Updating version in DB to $mig_version..."
+    		    
+                        # Update version table in DB
+    		    query="UPDATE $MIG_VERSION_TABLE_NAME SET version=$mig_version"
+    		    exec_sql "$query"
+    		    retval=$?
+    		    
+    		    if [ $retval -eq 0 ]; then
+    			    LOG_DEBUG "Successfully updated DB version to $mig_version."
+    		    else
+    			    LOG_FATAL "Failed to update DB version to $mig_version."
+    			    error=102
+    		    fi
+    		    
+    		else
+    		    
+    		    LOG_FATAL "Failed to apply migration $up_file."
+    		    error=103
+    		    
+    		fi
 		
 	    else
 		    error=101
@@ -259,7 +274,7 @@ if [ -d $dir ]; then
         	fi
 
             # Restore DB from backup
-        	PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME #2>/dev/null
+        	cleanup
         	retval=$?
 	        if [ $retval -ne 0 ]; then
 	            LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
