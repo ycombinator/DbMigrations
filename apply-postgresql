@@ -108,13 +108,19 @@ backup() {
 }
 
 cleanup() {
-    PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME #2>/dev/null
-    if [ -a "$DB_BACKUP_FILENAME" ]; then
+    LOG_DEBUG "Aborted..."
+    if [ ! -z $DB_BACKUP_FILENAME ] && [ -f $DB_BACKUP_FILENAME ] && [ -r $DB_BACKUP_FILENAME ] ; then
+        LOG_DEBUG "Cleaning up."
+        PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME
         rm $DB_BACKUP_FILENAME
+    else
+        LOG_DEBUG "No backup file was created."
     fi
 }
 
-trap "{cleanup ; exit 0}" SIGINT SIGTERM SIGKILL
+trap "{ cleanup ; exit 0 ; }" SIGINT SIGTERM SIGKILL
+
+sleep 5
 
 # First, try to connect
 query="\q"
