@@ -120,8 +120,6 @@ cleanup() {
 
 trap "{ cleanup ; exit 0 ; }" SIGINT SIGTERM SIGKILL
 
-sleep 5
-
 # First, try to connect
 query="\q"
 exec_sql "$query"
