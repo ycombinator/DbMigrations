@@ -20,7 +20,7 @@ source /usr/local/libexec/db-migrations/logging.sh
 UTC_TIME_WS_URI="http://www.earthtools.org/timezone/0/0"
 
 get_timestamp() {
-    output=$(curl -s $UTC_TIME_WS_URI)
+    output=$(curl -fs $UTC_TIME_WS_URI)
     retval=$?
     if [ $retval -ne 0 ]; then
 	return $retval
