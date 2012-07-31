@@ -20,7 +20,7 @@ source /usr/local/libexec/db-migrations/logging.sh
 UTC_TIME_WS_URI="http://developer.yahooapis.com/TimeService/V1/getTime?appid=foo&output=json"
 
 get_timestamp() {
-    response=$(curl -f -s $UTC_TIME_WS_URI)
+    response=$(curl -fs $UTC_TIME_WS_URI)
     retval=$?
     if [ $retval -ne 0 ] ; then
         return $retval
