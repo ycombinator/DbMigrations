@@ -17,15 +17,17 @@
 source /usr/local/libexec/db-migrations/logging.sh
 
 # Configurables
-UTC_TIME_WS_URI="http://www.earthtools.org/timezone/0/0"
+UTC_TIME_WS_URI="http://developer.yahooapis.com/TimeService/V1/getTime?appid=foo&output=json"
 
 get_timestamp() {
-    output=$(curl -s $UTC_TIME_WS_URI)
+    response=$(curl -f -s $UTC_TIME_WS_URI)
     retval=$?
-    if [ $retval -ne 0 ]; then
-	return $retval
+    if [ $retval -ne 0 ] ; then
+        return $retval
+
+    else
+        echo $response | sed 's/{"Result":{"Timestamp":\([0-9]*\)}}/\1/'
     fi
-    echo "$output" | xmllint --format - | grep utctime | sed 's/[^0-9]//g'
 }
 
 print_usage() {
