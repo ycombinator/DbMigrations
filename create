@@ -26,7 +26,8 @@ get_timestamp() {
         return $retval
 
     else
-        echo $response | sed 's/{"Result":{"Timestamp":\([0-9]*\)}}/\1/'
+        TIMESTAMP=$(echo $response | sed 's/{"Result":{"Timestamp":\([0-9]*\)}}/\1/')
+        date --date=@$TIMESTAMP +%Y%m%d%H%M%S
     fi
 }
 
