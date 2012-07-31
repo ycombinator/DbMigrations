@@ -39,7 +39,7 @@ class TimeUri:
 		return sedOut[0].strip()
 
 # Yahoo Time uri
-#URIS.append(TimeUri("""http://developer.yahooapis.com/TimeService/V1/getTime?appid=foo&output=json""","s/{\"Result\":{\"Timestamp\":\\([0-9]*\\)}}/\\1/"))
+URIS.append(TimeUri("""http://developer.yahooapis.com/TimeService/V1/getTime?appid=foo&output=json""","s/{\"Result\":{\"Timestamp\":\\([0-9]*\\)}}/\\1/"))
 
 def getDatestampFromTimestamp(timestamp):
 	dateCmd = ["date","-d","@"+timestamp.strip(),"+%Y%m%d%H%M%S"]

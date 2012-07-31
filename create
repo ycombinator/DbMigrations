@@ -16,21 +16,6 @@
 
 source /usr/local/libexec/db-migrations/logging.sh
 
-# Configurables
-UTC_TIME_WS_URI="http://developer.yahooapis.com/TimeService/V1/getTime?appid=foo&output=json"
-
-get_timestamp() {
-    response=$(curl -fs $UTC_TIME_WS_URI)
-    retval=$?
-    if [ $retval -ne 0 ] ; then
-        return $retval
-
-    else
-        TIMESTAMP=$(echo $response | sed 's/{"Result":{"Timestamp":\([0-9]*\)}}/\1/')
-        date --date=@$TIMESTAMP +%Y%m%d%H%M%S
-    fi
-}
-
 print_usage() {
     echo -e "Usage:\tcreate <options>"
     echo 
@@ -80,7 +65,7 @@ case $LOG_LEVEL_STR in
 esac
 
 # Generate timestamp
-timestamp=$(get_timestamp)
+timestamp=$(./skytime)
 retval=$?
 if [ $retval -ne 0 ]; then
     LOG_FATAL "Could not generate unique timestamp for migration."
