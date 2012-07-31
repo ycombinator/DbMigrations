@@ -1,0 +1,126 @@
+#!/usr/bin/python
+
+import sys
+from sys import exit, argv
+from subprocess import Popen, PIPE
+
+URIS = []
+FORMAT = "date"
+LOCAL = False
+usage = \
+"""skytime [arg]
+	arg:
+		-f FORMAT	Changes the format. Can be either date or time.
+		--no-local	Fail if network time is unavailable. [DEFAULT]
+		--local		Use local time, if possible.
+		--help		Print this help message."""
+
+class TimeUri:
+	uri="";
+	expr="";
+	def __init__(self, uri, expr=None):
+		self.uri = uri
+		self.expr = expr
+	def getTime(self):
+		# Curl the timestamp from the uri
+		curlCmd = ["curl","-fs",self.uri]
+		curlProc = Popen(curlCmd,stdout=PIPE)
+		curlOut = curlProc.communicate()
+		if(curlProc.returncode != 0):
+			sys.stderr.write("Could not run curl\n")
+			return None
+		sedCmd = ["sed","-s",self.expr]
+		sedProc = Popen(sedCmd,stdin=PIPE,stdout=PIPE)
+		sedProc.stdin.write(curlOut[0].strip())
+		sedOut = sedProc.communicate()
+		if(sedProc.returncode != 0):
+			sys.stderr.write("Could not run sed\n")
+			return None
+		return sedOut[0].strip()
+
+# Yahoo Time uri
+#URIS.append(TimeUri("""http://developer.yahooapis.com/TimeService/V1/getTime?appid=foo&output=json""","s/{\"Result\":{\"Timestamp\":\\([0-9]*\\)}}/\\1/"))
+
+def getDatestampFromTimestamp(timestamp):
+	dateCmd = ["date","-d","@"+timestamp.strip(),"+%Y%m%d%H%M%S"]
+	dateProc = Popen(dateCmd,stdin=PIPE,stdout=PIPE)
+	dateOut = dateProc.communicate()
+	if(dateProc.returncode != 0):
+		sys.stderr.write("Could not run date\n")
+		return None
+	return dateOut[0].strip()
+
+# Fetches current time from the list of servers in URIS
+def getTimeFromServers():
+	for uri in URIS:
+		res = uri.getTime()
+		if(res != None):
+			return res
+	return None
+
+def getTimeFromComputer():
+	dateCmd = ["date","-u","+%s"]
+	dateProc = Popen(dateCmd,stdout=PIPE)
+	dateRawOut = dateProc.communicate()
+	if(dateProc.returncode != 0):
+		sys.stderr.write("Could not run date\n")
+		return None
+	else:
+		return dateRawOut[0].strip()
+
+def success(msg=None):
+	if(msg != None):
+		print msg
+	exit(0)
+
+def fail(msg=None):
+	if(msg != None):
+		print msg
+	exit(1)
+
+def formatAndPrint(time):
+	if(FORMAT=="date"):
+		success(getDatestampFromTimestamp(time))
+	elif(FORMAT=="time"):
+		success(time)
+
+def getTime():
+	serverTime = getTimeFromServers()
+	if(serverTime != None):
+		formatAndPrint(serverTime)
+	elif(not LOCAL):
+		fail("Could not get server time (local disabled)")
+	else:
+		localTime = getTimeFromComputer()
+		if(localTime != None):
+			formatAndPrint(localTime)
+		else:
+			fail("Could not get local time or server time")
+
+def printUsage():
+	print usage
+
+if(__name__ == "__main__"):
+	next_format = False
+	first = True
+	for arg in argv:
+		if(first):
+			first = False
+		elif(next_format):
+			FORMAT = arg
+			next_format = False
+		else:
+			if(arg == "--no-local"):
+				LOCAL = False
+			elif arg == "--local":
+				LOCAL = True
+			elif arg == "-f":
+				next_format = True
+			elif arg == "--help":
+				printUsage()
+				exit(0)
+			else:
+				print "Unrecognized option: "+arg
+				printUsage()
+				exit(1)
+	getTime()
