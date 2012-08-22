@@ -118,7 +118,12 @@ cleanup() {
     fi
 }
 
-trap "{ cleanup ; exit 0 ; }" SIGINT SIGTERM SIGKILL
+cleanupAndExit() {
+    cleanup
+    exit 0
+}
+
+trap "cleanupAndExit" SIGINT SIGTERM SIGKILL
 
 # First, try to connect
 query="\q"
