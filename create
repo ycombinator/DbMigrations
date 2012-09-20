@@ -65,7 +65,7 @@ case $LOG_LEVEL_STR in
 esac
 
 # Generate timestamp
-timestamp=$(skytime)
+timestamp=$(db-migrations-skytime)
 retval=$?
 if [ $retval -ne 0 ]; then
     LOG_FATAL "Could not generate unique timestamp for migration."

@@ -95,7 +95,9 @@ exec_sql() {
 }
 
 exec_sql_file() {
+    PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="SET statement_timeout=0;" 2>/dev/null
     output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1 2>&1)
+    PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="ANALYZE VERBOSE;" 2>/dev/null
     retval=$(echo "$output" | grep ERROR | wc -l)
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
