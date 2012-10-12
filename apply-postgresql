@@ -95,7 +95,9 @@ exec_sql() {
 }
 
 exec_sql_file() {
-    output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME < $1 2>&1)
+    CMD=$(cat "$1")
+    CMD="set statement_timeout = 0 ; $CMD ; analyze verbose;"
+    output=$(echo $CMD | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 5>&1)
     retval=$(echo "$output" | grep ERROR | wc -l)
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
