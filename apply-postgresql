@@ -181,7 +181,7 @@ LOG_DEBUG "DB version = $db_version"
 dir=$MIG_BASEDIR/$DB_NAME
 if [ -d $dir ]; then
     LOG_DEBUG "Looking for migrations in $dir..."
-    all_migs=$(find $dir -maxdepth 1 -mindepth 1 -type d -name [0-9]* | sort -n)
+    all_migs=$(find $dir -maxdepth 1 -mindepth 1 -type d -name "[0-9]*" | sort -n)
     applicable_migs=""
     for mig in $all_migs; do
     	mig_version=$(basename $mig)
