@@ -208,7 +208,6 @@ if [ -d $dir ]; then
         fi
     fi
 
-    PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="SET statement_timeout=0;" 2>/dev/null
     # Apply migrations, in order
     error=0
     for mig in $applicable_migs; do
@@ -265,7 +264,7 @@ if [ -d $dir ]; then
 
     done
 
-    PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="ANALYZE VERBOSE;" 2>/dev/null
+    echo "set statement_timeout=0 ; analyze verbose ;" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 2>/dev/null
 
     if [ $DB_BACKUP -eq 1 ]; then
     
