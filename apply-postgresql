@@ -41,17 +41,12 @@ print_usage() {
     echo -e "\t-l <log level>"
     echo -e "\t\tSpecify the level of logging: DEBUG, INFO, WARNING, FATAL. Optional; default = INFO"
     echo
-    echo -e "\t-n"
-    echo -e "\t\tDo not backup tables via pg dump."
-    echo -e "\t\tWarning: Using this option may destroy data in the tables."
-    echo
 }
 
 # Set defaults
 let LOG_LEVEL=$LOG_LEVEL_INFO
 DB_HOST=localhost
 DB_PORT=5432
-DB_BACKUP=1
 MIG_BASEDIR=.
 
 # Get user input
@@ -64,7 +59,6 @@ while getopts ":h:p:U:d:b:l:hn" opt; do
 	b) MIG_BASEDIR=$OPTARG;;
 	l) LOG_LEVEL_STR=$OPTARG;;
 	h) print_usage; exit 0;;
-	n) DB_BACKUP=0;;
 	:) LOG_FATAL "Option -$OPTARG requires an argument"; print_usage;  exit 1;;
     esac
 done 
@@ -88,15 +82,13 @@ case $LOG_LEVEL_STR in
     FATAL)   let LOG_LEVEL=$LOG_LEVEL_FATAL;;
 esac
 
-DB_BACKUP_FILENAME=""
-
 exec_sql() {
     PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command="$@" 2>/dev/null
 }
 
 exec_sql_file() {
     CMD=$(cat "$1")
-    CMD="set statement_timeout = 0 ; $CMD ;"
+    CMD="set statement_timeout = 0 ; BEGIN; $CMD ; COMMIT;"
     output=$(echo "$CMD" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 5>&1)
     retval=$(echo "$output" | grep ERROR | wc -l)
     if [ $retval -gt 0 ]; then
@@ -104,28 +96,6 @@ exec_sql_file() {
     fi
     return $retval
 }
-
-backup() {
-    PGPASSWORD=$DB_PASSWORD pg_dump --format=tar --schema=public --file=$DB_BACKUP_FILENAME --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME
-}
-
-cleanup() {
-    LOG_DEBUG "Aborted..."
-    if [ ! -z $DB_BACKUP_FILENAME ] && [ -f $DB_BACKUP_FILENAME ] && [ -r $DB_BACKUP_FILENAME ] ; then
-        LOG_DEBUG "Cleaning up."
-        PGPASSWORD=$DB_PASSWORD pg_restore --create --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME --dbname=$DB_NAME $DB_BACKUP_FILENAME
-        rm $DB_BACKUP_FILENAME
-    else
-        LOG_DEBUG "No backup file was created."
-    fi
-}
-
-cleanupAndExit() {
-    cleanup
-    exit 0
-}
-
-trap "cleanupAndExit" SIGINT SIGTERM SIGKILL
 
 # First, try to connect
 query="\q"
@@ -196,18 +166,6 @@ if [ -d $dir ]; then
     	exit
     fi
     
-    if [ $DB_BACKUP -eq 1 ]; then
-        # Backup DB
-        echo "Backing up database (version = $db_version) in case there is a need to rollback."
-        DB_BACKUP_FILENAME=$( mktemp -t db-migrations-backup-XXXXXXXXXX )
-        backup
-        retval=$?
-        if [ $retval -ne 0 ]; then
-    	    LOG_FATAL "Could not create database backup. Not safe to attempt migrations."
-        	exit $retval
-        fi
-    fi
-
     # Apply migrations, in order
     error=0
     for mig in $applicable_migs; do
@@ -265,58 +223,6 @@ if [ -d $dir ]; then
     done
 
     echo "set statement_timeout=0 ; analyze verbose ;" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 2>/dev/null
-
-    if [ $DB_BACKUP -eq 1 ]; then
-    
-        # Rollback if there were errors
-        if [ $error -ne 0 ]; then
-
-    	    # Drop all sequences
-	        drop_sequences_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP SEQUENCE ' || sequence_name || ' CASCADE;' FROM information_schema.sequences WHERE sequence_schema='public'")
-    
-	        # Drop all tables 
-    	    drop_tables_stmts=$(PGPASSWORD=$DB_PASSWORD psql --quiet --tuples-only --host=$DB_HOST --port=$DB_PORT --username=$DB_USERNAME $DB_NAME --command="SELECT 'DROP TABLE ' || table_name || ' CASCADE;' FROM information_schema.tables WHERE table_schema='public' AND table_type != 'VIEW' AND table_name NOT LIKE 'pg_ts_%%'")
-    
-        	echo -e "$drop_sequences_stmts\n$drop_tables_stmts" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --port=$DB_PORT --username $DB_USERNAME $DB_NAME 2>/dev/null
-    	    retval=$?
-        	if [ $retval -ne 0 ]; then
-        	    LOG_DEBUG "Rollback return code = $retval"
-    	        LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
-    	        LOG_FATAL "Backup file located at: $DB_BACKUP_FILENAME"
-    	        exit 201
-        	fi
-
-            # Restore DB from backup
-        	cleanup
-        	retval=$?
-	        if [ $retval -ne 0 ]; then
-	            LOG_FATAL "Could not rollback. Database may be in an inconsistent state!"
-	            LOG_FATAL "Backup file located at: $DB_BACKUP_FILENAME"
-        	    exit 202
-        	fi
-
-            # Delete the backup file
-            rm $DB_BACKUP_FILENAME
-
-	        echo "Rolled back database (version = $db_version) from backup."
-    	    exit $error
-        else
-    
-            # Delete the backup file
-            rm $DB_BACKUP_FILENAME
-        
-        fi
-    
-    else
-    
-        if [ $error -ne 0 ]; then
-        
-            LOG_FATAL "Database may be in an inconsistent state and database backup was not created!"
-            exit 201
-        
-        fi
-        
-    fi
 
 else
     echo "No migrations for db = $DB_NAME found. Nothing to do."
