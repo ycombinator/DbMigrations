@@ -1,0 +1,11 @@
+To run unit tests:
+------------------
+make test
+
+To install:
+-----------
+sudo make install
+
+To uninstall:
+-------------
+sudo make uninstall
