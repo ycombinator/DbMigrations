@@ -89,16 +89,16 @@ exec_sql() {
 exec_sql_file() {
     CMD=$(cat "$1")
     CMD="set statement_timeout = 0 ; $CMD ;"
-    output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command "$CMD")
-    real_retval=$?
-    if [ $real_retval -gt 0 ]; then
-	LOG_FATAL "$output"
-	return $real_retval
-    fi
-    retval=$(echo "$output" | grep ERROR | wc -l)
+    output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command "$CMD" 2>&1)
+    retval=$?
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
 	return $retval
+    fi
+    num_errors=$(echo "$output" | grep ERROR | wc -l)
+    if [ $num_errors -gt 0 ]; then
+	LOG_FATAL "$output"
+	return $num_errors
     fi
     return 0
 }
