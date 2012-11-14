@@ -88,13 +88,19 @@ exec_sql() {
 
 exec_sql_file() {
     CMD=$(cat "$1")
-    CMD="set statement_timeout = 0 ; BEGIN; $CMD ; COMMIT;"
-    output=$(echo "$CMD" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 5>&1)
+    CMD="set statement_timeout = 0 ; $CMD ;"
+    output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command "$CMD")
+    real_retval=$?
+    if [ $real_retval -gt 0 ]; then
+	LOG_FATAL "$output"
+	return $real_retval
+    fi
     retval=$(echo "$output" | grep ERROR | wc -l)
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
+	return $retval
     fi
-    return $retval
+    return 0
 }
 
 # First, try to connect
