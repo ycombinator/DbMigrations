@@ -226,7 +226,7 @@ if [ -d $dir ]; then
 
     done
 
-    echo "set statement_timeout=0 ; analyze verbose ;" | PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 2>/dev/null
+    echo "analyze verbose ;" | PGOPTIONS='--statement-timeout=0' PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME 2>/dev/null
 
 else
     echo "No migrations for db = $DB_NAME found. Nothing to do."
