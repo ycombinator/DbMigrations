@@ -87,9 +87,7 @@ exec_sql() {
 }
 
 exec_sql_file() {
-    CMD=$(cat "$1")
-    CMD="set statement_timeout = 0 ; $CMD ;"
-    output=$(PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --command "$CMD" 2>&1)
+    output=$(PGOPTIONS='--statement-timeout=0' PGPASSWORD=$DB_PASSWORD psql --quiet --host=$DB_HOST --username=$DB_USERNAME --pset=pager=off --pset=tuples_only --dbname=$DB_NAME --file="$1" --single-transaction 2>&1)
     retval=$?
     if [ $retval -gt 0 ]; then
 	LOG_FATAL "$output"
